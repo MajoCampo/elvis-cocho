@@ -1,0 +1,22 @@
+[
+  { "name": "Randy Bermudez", "slackId": "U0APE9D9PEC", "month": 1, "day": 10 },
+  { "name": "Carol Diniz", "slackId": "U0BRUB44AUD", "month": 2, "day": 16 },
+  { "name": "Majo Campo", "slackId": "U09JYSJ8Z54", "month": 2, "day": 18 },
+  { "name": "Ramon Perez", "slackId": "U0BRW8Z8UVC", "month": 2, "day": 24 },
+  { "name": "Daniel E. Herrera", "slackId": "U0BEX0Z92GK", "month": 5, "day": 8 },
+  { "name": "Alejandro Varela", "slackId": "U08T1RWD0GN", "month": 6, "day": 4 },
+  { "name": "Gilberto", "slackId": "U0BF38FPKFC", "month": 6, "day": 15 },
+  { "name": "Brian Arenas", "slackId": "U08TCPU35GD", "month": 7, "day": 14 },
+  { "name": "Gary", "slackId": "U08T1RVP92A", "month": 7, "day": 29 },
+  { "name": "Daniela Suarez", "slackId": "U0AGG5ENU69", "month": 8, "day": 8 },
+  { "name": "Estefan Hense", "slackId": "U0BASH09M89", "month": 8, "day": 15 },
+  { "name": "Jorge Camargo", "slackId": "U08T1RWMER4", "month": 8, "day": 18 },
+  { "name": "Danita", "slackId": "U0A9NMCP7RQ", "month": 9, "day": 16 },
+  { "name": "Julia Bento", "slackId": "U0A91GD7ZCG", "month": 10, "day": 4 },
+  { "name": "Gabi Cartoni", "slackId": "U0BQAF0HSVC", "month": 10, "day": 27 },
+  { "name": "Joaquin Jailth Trejo Perez", "slackId": "U0C00BK6GQM", "month": 11, "day": 6 },
+  { "name": "Laura Marchi", "slackId": "U0BF184BLT0", "month": 11, "day": 17 },
+  { "name": "JC", "slackId": "U0B9X32T4GY", "month": 11, "day": 21 },
+  { "name": "Edwin", "slackId": "U0BNVTPQSTU", "month": 12, "day": 7 },
+  { "name": "Gabriela Goulart", "slackId": "U0B02C07QMT", "month": 12, "day": 13 }
+]
