@@ -43,7 +43,7 @@ function nextBirthdayReply() {
   return `🎉 El próximo cumpleaños es de <@${upcoming.slackId}> el ${upcoming.day}/${upcoming.month}. ¡Ya estoy calentando la voz! 🎤`;
 }
 
-async function askClaude(userText) {
+async function askClaude(userText, maxTokens = 300) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -53,14 +53,15 @@ async function askClaude(userText) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-5", // ajusta al modelo disponible en tu cuenta
-      max_tokens: 300,
+      max_tokens: maxTokens,
       system: PERSONA,
       messages: [{ role: "user", content: userText }],
     }),
   });
   const data = await response.json();
   const textBlock = data?.content?.find((b) => b.type === "text");
-  return textBlock?.text || fallbackReplies[0];
+  if (!textBlock?.text) throw new Error("Claude no devolvió texto: " + JSON.stringify(data));
+  return textBlock.text;
 }
 
 // --- Handler de DMs ---
@@ -87,7 +88,7 @@ app.message(async ({ message, say }) => {
   await say(fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)]);
 });
 
-// --- Felicitaciones automáticas ---
+// --- Felicitaciones automáticas (dinámicas con Claude, con respaldo fijo si falla) ---
 const templates = [
   (name) =>
     `:tada::guitar: ¡AGÁRRENSE TODOS! Hoy es el cumpleaños de <@${name}> y yo, Elvis Cocho, no vine a susurrar, vine a GRITARLO: ` +
@@ -103,6 +104,20 @@ const templates = [
 function pickMessage(name) {
   const fn = templates[Math.floor(Math.random() * templates.length)];
   return fn(name);
+}
+
+async function generateBirthdayMessage(name) {
+  if (!ANTHROPIC_API_KEY) return pickMessage(name);
+  try {
+    const prompt = `Escribe UN mensaje de cumpleaños para publicar en el canal de Slack #tech-product,
+dirigido a la persona <@${name}>. Debe ser corto (2-4 líneas), exageradamente extrovertido y gracioso,
+con emojis, y usar la mención exacta <@${name}> dentro del texto (formato Slack). No agregues comillas
+alrededor de todo el mensaje, ni expliques lo que estás haciendo — responde ÚNICAMENTE con el mensaje final.`;
+    return await askClaude(prompt);
+  } catch (err) {
+    console.error("Claude falló generando mensaje de cumpleaños, usando respaldo fijo:", err);
+    return pickMessage(name);
+  }
 }
 
 // GIPHY_API_KEY opcional en .env; si no la pones, usa la key pública de prueba de Giphy
@@ -130,17 +145,18 @@ async function checkBirthdaysAndPost() {
   const celebrantes = birthdays.filter((b) => b.month === month && b.day === day);
 
   for (const persona of celebrantes) {
-    const gifUrl = await getRandomBirthdayGif();
-    const blocks = [
-      { type: "section", text: { type: "mrkdwn", text: pickMessage(persona.slackId) } },
-    ];
+    const [gifUrl, messageText] = await Promise.all([
+      getRandomBirthdayGif(),
+      generateBirthdayMessage(persona.slackId),
+    ]);
+    const blocks = [{ type: "section", text: { type: "mrkdwn", text: messageText } }];
     if (gifUrl) {
       blocks.push({ type: "image", image_url: gifUrl, alt_text: "gif de cumpleaños" });
     }
 
     await app.client.chat.postMessage({
       channel: CHANNEL,
-      text: pickMessage(persona.slackId), // fallback para notificaciones
+      text: messageText, // fallback para notificaciones
       blocks,
       unfurl_links: false,
     });
@@ -154,11 +170,55 @@ async function checkBirthdaysAndPost() {
 
 cron.schedule("0 9 * * *", checkBirthdaysAndPost);
 
+// --- Mensaje motivacional diario, ridículamente exagerado ---
+const motivationalQuotes = [
+  "☀️ ¡BUENOS DÍAS, EQUIPO DE CAMPEONES! Elvis Cocho les recuerda: *\"un bug no resuelto es solo una feature que todavía no entendemos\"* 🔧💪 ¡A romperla hoy!",
+  "🚀 Frase del día, cortesía de Elvis Cocho: *\"si tu código compila a la primera, revisa dos veces, porque algo anda MUY bien o MUY mal\"* 😂 ¡Éxito, leyendas!",
+  "🎸 Elvis Cocho en el micrófono: *\"cada refacción que vendemos es una amistad automotriz que salvamos. Somos héroes, aunque no traigamos capa\"* 🦸🔥",
+  "🥇 ¡ARRIBA ESE ÁNIMO! Como dice Elvis Cocho: *\"un deploy sin errores es como un taco sin salsa: técnicamente válido, pero le falta emoción\"* 🌮💻",
+  "💥 Elvis Cocho declara el día oficialmente OTRO GRAN DÍA: *\"si el Wi-Fi aguanta y el café no se acaba, ya ganamos el 80% del trabajo\"* ☕📶",
+  "🎤 Mensaje motivacional non-negociable de Elvis Cocho: *\"eres más productivo que un tornillo Phillips en un mundo de tornillos de estrella\"* 🔩✨",
+  "🏆 Elvis Cocho grita desde el escenario: *\"no importa cuántos tickets tengas hoy, tú eres más fuerte que un catalizador oxidado\"* 🚗💪",
+];
+
+async function generateMotivationalMessage() {
+  if (!ANTHROPIC_API_KEY) {
+    return motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+  }
+  try {
+    const prompt = `Escribe UN mensaje motivacional para el canal de Slack #tech-product de un equipo de
+producto/ingeniería/datos de una empresa de refacciones automotrices (Pitz). Debe ser corto (2-4 líneas),
+casi ridículo de exagerado, gracioso, con emojis, y con alguna referencia ocasional al mundo de talleres,
+refacciones o desarrollo de software si viene al caso. No repitas frases de días anteriores, sé creativo
+cada vez. Responde ÚNICAMENTE con el mensaje final, sin explicaciones.`;
+    return await askClaude(prompt);
+  } catch (err) {
+    console.error("Claude falló generando la frase motivacional, usando respaldo fijo:", err);
+    return motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+  }
+}
+
+async function postDailyMotivation() {
+  const quote = await generateMotivationalMessage();
+  await app.client.chat.postMessage({
+    channel: CHANNEL,
+    text: quote,
+    unfurl_links: false,
+  });
+  console.log("☀️ Mensaje motivacional del día enviado.");
+}
+
+cron.schedule("0 11 * * *", postDailyMotivation);
+
 (async () => {
   await app.start();
   console.log("🎤 Elvis Cocho está en el escenario — DMs y cumpleaños activos.");
 
   if (process.argv.includes("--test-now")) {
     await checkBirthdaysAndPost();
+  }
+
+  if (process.argv.includes("--test-motivation")) {
+    await postDailyMotivation();
   }
 })();
