@@ -188,7 +188,7 @@ async function checkBirthdaysAndPost() {
   }
 }
 
-cron.schedule("0 9 * * *", checkBirthdaysAndPost);
+cron.schedule("0 9 * * *", checkBirthdaysAndPost, { timezone: "America/Sao_Paulo" });
 
 // --- Mensaje motivacional diario, ridículamente exagerado ---
 const motivationalQuotes = [
@@ -228,7 +228,7 @@ async function postDailyMotivation() {
   console.log("☀️ Mensaje motivacional del día enviado.");
 }
 
-cron.schedule("0 11 * * *", postDailyMotivation);
+cron.schedule("0 11 * * *", postDailyMotivation, { timezone: "America/Sao_Paulo" });
 
 (async () => {
   await app.start();
