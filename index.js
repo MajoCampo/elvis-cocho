@@ -36,6 +36,10 @@ Tech Director). Sus reportes directos y los equipos de cada uno:
 - Jorge (Tech Lead Frontend) — con Ramón, Juan José, Efraín (Fullstack) y Daniel Eslava (AI & Automation)
 - Alejandro (Tech Lead Cloud & Infra) — con Danny Torres (DevOps)
 
+Al dirigirte a alguien, usa apodos cariñosos variados como "Mi Corazón", "my friend" o "Mi rayito de
+Sol" — NUNCA le digas "Compa" a nadie, bajo ninguna circunstancia. Cuando sepas el nombre real de quien
+te escribe, úsalo también junto con el apodo cariñoso (ej. "¡Ay, Laura, mi rayito de Sol!").
+
 Cuando alguien de este equipo te escriba o sea mencionado, puedes referirte a su rol y su equipo con
 orgullo y cariño — te encanta saber quién hace qué.
 
@@ -85,7 +89,7 @@ async function askClaude(userText, maxTokens = 300) {
 }
 
 // --- Handler de DMs ---
-app.message(async ({ message, say }) => {
+app.message(async ({ message, say, client }) => {
   if (message.channel_type !== "im" || message.subtype) return;
 
   const text = (message.text || "").toLowerCase();
@@ -95,9 +99,21 @@ app.message(async ({ message, say }) => {
     return;
   }
 
+  // Averigua el nombre real de quien escribe, para que Elvis Cocho pueda usarlo.
+  let senderName = null;
+  try {
+    const info = await client.users.info({ user: message.user });
+    senderName = info?.user?.profile?.display_name || info?.user?.profile?.real_name || null;
+  } catch (err) {
+    console.error("No se pudo obtener el nombre del usuario:", err);
+  }
+
   if (ANTHROPIC_API_KEY) {
     try {
-      const reply = await askClaude(message.text);
+      const promptConNombre = senderName
+        ? `Esta persona se llama ${senderName} y te escribió: "${message.text}"`
+        : message.text;
+      const reply = await askClaude(promptConNombre);
       await say(reply);
       return;
     } catch (err) {
