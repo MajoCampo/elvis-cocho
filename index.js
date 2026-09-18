@@ -44,7 +44,9 @@ Cuando alguien de este equipo te escriba o sea mencionado, puedes referirte a su
 orgullo y cariño — te encanta saber quién hace qué.
 
 Respuestas cortas (2-4 líneas), nunca formales, siempre con muchísima calidez y ganas de hacer
-sentir especial a quien te habla.`;
+sentir especial a quien te habla. Tu humor es natural y de "corporativo divertido" — evita hacer
+chistes o referencias forzadas al mundo automotriz, refacciones o talleres; solo suénate como una
+persona genuinamente carismática de oficina, no como mascota temática de la empresa.`;
 
 // --- Respuestas de respaldo si no hay Claude conectado ---
 const fallbackReplies = [
@@ -122,6 +124,37 @@ app.message(async ({ message, say, client }) => {
   }
 
   await say(fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)]);
+});
+
+// --- Handler de @menciones en canales (ej. #tech-product) ---
+app.event("app_mention", async ({ event, say, client }) => {
+  let senderName = null;
+  try {
+    const info = await client.users.info({ user: event.user });
+    senderName = info?.user?.profile?.display_name || info?.user?.profile?.real_name || null;
+  } catch (err) {
+    console.error("No se pudo obtener el nombre del usuario:", err);
+  }
+
+  const textoLimpio = (event.text || "").replace(/<@[^>]+>/g, "").trim();
+
+  if (ANTHROPIC_API_KEY) {
+    try {
+      const prompt = senderName
+        ? `Esta persona se llama ${senderName} y te mencionó en un canal de Slack diciendo: "${textoLimpio}"`
+        : textoLimpio || "Te mencionaron en el canal sin escribir nada más.";
+      const reply = await askClaude(prompt);
+      await say({ text: reply, thread_ts: event.ts });
+      return;
+    } catch (err) {
+      console.error("Error llamando a Claude (app_mention):", err);
+    }
+  }
+
+  await say({
+    text: fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)],
+    thread_ts: event.ts,
+  });
 });
 
 // --- Felicitaciones automáticas (dinámicas con Claude, con respaldo fijo si falla) ---
@@ -208,13 +241,13 @@ cron.schedule("0 9 * * *", checkBirthdaysAndPost, { timezone: "America/Sao_Paulo
 
 // --- Mensaje motivacional diario, ridículamente exagerado ---
 const motivationalQuotes = [
-  "☀️ ¡BUENOS DÍAS, EQUIPO DE CAMPEONES! Elvis Cocho les recuerda: *\"un bug no resuelto es solo una feature que todavía no entendemos\"* 🔧💪 ¡A romperla hoy!",
-  "🚀 Frase del día, cortesía de Elvis Cocho: *\"si tu código compila a la primera, revisa dos veces, porque algo anda MUY bien o MUY mal\"* 😂 ¡Éxito, leyendas!",
-  "🎸 Elvis Cocho en el micrófono: *\"cada refacción que vendemos es una amistad automotriz que salvamos. Somos héroes, aunque no traigamos capa\"* 🦸🔥",
-  "🥇 ¡ARRIBA ESE ÁNIMO! Como dice Elvis Cocho: *\"un deploy sin errores es como un taco sin salsa: técnicamente válido, pero le falta emoción\"* 🌮💻",
+  "☀️ ¡BUENOS DÍAS, EQUIPO DE CAMPEONES! Elvis Cocho les recuerda: *\"un problema no resuelto es solo una oportunidad que todavía no entendemos\"* 💪✨ ¡A romperla hoy!",
+  "🚀 Frase del día, cortesía de Elvis Cocho: *\"si tu día empieza sin contratiempos, revisa dos veces, porque algo anda MUY bien o MUY bien\"* 😂 ¡Éxito, leyendas!",
+  "🎸 Elvis Cocho en el micrófono: *\"cada tarea que resolvemos es una pequeña victoria que merece aplausos\"* 👏🔥",
+  "🥇 ¡ARRIBA ESE ÁNIMO! Como dice Elvis Cocho: *\"un lunes sin drama es una obra de arte moderno\"* 🖼️💻",
   "💥 Elvis Cocho declara el día oficialmente OTRO GRAN DÍA: *\"si el Wi-Fi aguanta y el café no se acaba, ya ganamos el 80% del trabajo\"* ☕📶",
-  "🎤 Mensaje motivacional non-negociable de Elvis Cocho: *\"eres más productivo que un tornillo Phillips en un mundo de tornillos de estrella\"* 🔩✨",
-  "🏆 Elvis Cocho grita desde el escenario: *\"no importa cuántos tickets tengas hoy, tú eres más fuerte que un catalizador oxidado\"* 🚗💪",
+  "🎤 Mensaje motivacional non-negociable de Elvis Cocho: *\"eres más productivo de lo que crees, y más carismático de lo que admites\"* ✨",
+  "🏆 Elvis Cocho grita desde el escenario: *\"no importa cuántas cosas tengas pendientes hoy, tú eres más fuerte que un lunes cualquiera\"* 💪",
 ];
 
 async function generateMotivationalMessage() {
@@ -223,10 +256,10 @@ async function generateMotivationalMessage() {
   }
   try {
     const prompt = `Escribe UN mensaje motivacional para el canal de Slack #tech-product de un equipo de
-producto/ingeniería/datos de una empresa de refacciones automotrices (Pitz). Debe ser corto (2-4 líneas),
-casi ridículo de exagerado, gracioso, con emojis, y con alguna referencia ocasional al mundo de talleres,
-refacciones o desarrollo de software si viene al caso. No repitas frases de días anteriores, sé creativo
-cada vez. Responde ÚNICAMENTE con el mensaje final, sin explicaciones.`;
+producto/ingeniería/datos. Debe ser corto (2-4 líneas), casi ridículo de exagerado, gracioso, con
+emojis, tono natural de "corporativo divertido" — SIN referencias al mundo automotriz, refacciones
+ni talleres. No repitas frases de días anteriores, sé creativo cada vez. Responde ÚNICAMENTE con el
+mensaje final, sin explicaciones.`;
     return await askClaude(prompt);
   } catch (err) {
     console.error("Claude falló generando la frase motivacional, usando respaldo fijo:", err);
@@ -244,7 +277,48 @@ async function postDailyMotivation() {
   console.log("☀️ Mensaje motivacional del día enviado.");
 }
 
-cron.schedule("0 11 * * *", postDailyMotivation, { timezone: "America/Sao_Paulo" });
+cron.schedule("0 11 * * 1-4", postDailyMotivation, { timezone: "America/Sao_Paulo" });
+
+// --- Viernes: día de relajarse, cóctel random "liberado" ---
+const cocktails = [
+  "Mojito", "Piña Colada", "Caipirinha", "Margarita", "Aperol Spritz",
+  "Cuba Libre", "Daiquiri", "Gin Tonic", "Negroni", "Michelada",
+];
+
+function pickCocktail() {
+  return cocktails[Math.floor(Math.random() * cocktails.length)];
+}
+
+async function generateFridayMessage(cocktail) {
+  const fallback = `🍹🎉 ¡Mis amores, hoy es VIERNES! Elvis Cocho declara oficialmente que hoy toca relajarse — ` +
+    `y el *${cocktail}* queda LIBERADO para quien lo quiera celebrar. ¡Nos vemos el lunes con toda la energía! 💃🕺`;
+
+  if (!ANTHROPIC_API_KEY) return fallback;
+
+  try {
+    const prompt = `Es viernes al mediodía. Escribe UN mensaje corto (2-4 líneas) para el canal de Slack
+#tech-product anunciando que hoy es día de relajarse, y que el cóctel "${cocktail}" queda oficialmente
+"liberado" (como broma, no en serio) para quien lo quiera disfrutar al terminar el día. Tono muy
+extrovertido, gracioso, con emojis. Responde ÚNICAMENTE con el mensaje final.`;
+    return await askClaude(prompt);
+  } catch (err) {
+    console.error("Claude falló generando el mensaje del viernes, usando respaldo fijo:", err);
+    return fallback;
+  }
+}
+
+async function postFridayVibes() {
+  const cocktail = pickCocktail();
+  const message = await generateFridayMessage(cocktail);
+  await app.client.chat.postMessage({
+    channel: CHANNEL,
+    text: message,
+    unfurl_links: false,
+  });
+  console.log(`🍹 Mensaje de viernes enviado (cóctel: ${cocktail}).`);
+}
+
+cron.schedule("0 12 * * 5", postFridayVibes, { timezone: "America/Sao_Paulo" });
 
 (async () => {
   await app.start();
@@ -256,5 +330,9 @@ cron.schedule("0 11 * * *", postDailyMotivation, { timezone: "America/Sao_Paulo"
 
   if (process.argv.includes("--test-motivation")) {
     await postDailyMotivation();
+  }
+
+  if (process.argv.includes("--test-friday")) {
+    await postFridayVibes();
   }
 })();
