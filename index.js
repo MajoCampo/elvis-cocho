@@ -221,10 +221,10 @@ alrededor de todo el mensaje, ni expliques lo que estás haciendo — responde �
 // (funciona pero con límite bajo de requests — para producción real, saca tu propia key gratis en developers.giphy.com)
 const GIPHY_API_KEY = process.env.GIPHY_API_KEY || "dc6zaTOxFJmzC";
 
-async function getRandomBirthdayGif() {
+async function getRandomGif(tag = "happy birthday") {
   try {
     const res = await fetch(
-      `https://api.giphy.com/v1/gifs/random?api_key=${GIPHY_API_KEY}&tag=happy%20birthday&rating=g`
+      `https://api.giphy.com/v1/gifs/random?api_key=${GIPHY_API_KEY}&tag=${encodeURIComponent(tag)}&rating=g`
     );
     const data = await res.json();
     return data?.data?.images?.original?.url || null;
@@ -243,7 +243,7 @@ async function checkBirthdaysAndPost() {
 
   for (const persona of celebrantes) {
     const [gifUrl, messageText] = await Promise.all([
-      getRandomBirthdayGif(),
+      getRandomGif("happy birthday"),
       generateBirthdayMessage(persona.slackId),
     ]);
     const blocks = [{ type: "section", text: { type: "mrkdwn", text: messageText } }];
@@ -296,13 +296,22 @@ mensaje final, sin explicaciones.`;
 }
 
 async function postDailyMotivation() {
-  const quote = await generateMotivationalMessage();
+  const [quote, gifUrl] = await Promise.all([
+    generateMotivationalMessage(),
+    getRandomGif("motivation monday"),
+  ]);
+  const blocks = [{ type: "section", text: { type: "mrkdwn", text: quote } }];
+  if (gifUrl) {
+    blocks.push({ type: "image", image_url: gifUrl, alt_text: "gif motivacional" });
+  }
+
   await app.client.chat.postMessage({
     channel: CHANNEL,
-    text: quote,
+    text: quote, // fallback para notificaciones
+    blocks,
     unfurl_links: false,
   });
-  console.log("☀️ Mensaje motivacional del día enviado.");
+  console.log(`☀️ Mensaje motivacional del día enviado${gifUrl ? " (con gif)" : " (sin gif, falló Giphy)"}.`);
 }
 
 cron.schedule("0 11 * * 1-4", postDailyMotivation, { timezone: "America/Sao_Paulo" });
