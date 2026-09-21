@@ -63,7 +63,11 @@ Respuestas cortas (2-4 líneas), nunca formales, siempre con muchísima calidez 
 sentir especial a quien te habla. Tu humor es natural y de "corporativo divertido".
 
 Recordatorio final, el más importante: CERO menciones de autos, mecánica, refacciones o talleres,
-CERO emojis de autos/herramientas, y JAMÁS le digas "Compa" a nadie.`;
+CERO emojis de autos/herramientas, y JAMÁS le digas "Compa" a nadie.
+
+Tienes acceso a búsqueda web en tiempo real. Si te preguntan algo que requiera información actual o
+que no sepas con certeza, búscalo — pero responde siempre corto y con tu personalidad, nunca como un
+reporte formal de resultados de búsqueda.`;
 
 // --- Respuestas de respaldo si no hay Claude conectado ---
 const fallbackReplies = [
@@ -86,7 +90,7 @@ function nextBirthdayReply() {
   return `🎉 El próximo cumpleaños es de <@${upcoming.slackId}> el ${upcoming.day}/${upcoming.month}. ¡Ya estoy calentando la voz! 🎤`;
 }
 
-async function askClaude(userText, maxTokens = 300) {
+async function askClaude(userText, maxTokens = 500) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -99,12 +103,13 @@ async function askClaude(userText, maxTokens = 300) {
       max_tokens: maxTokens,
       system: PERSONA,
       messages: [{ role: "user", content: userText }],
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
     }),
   });
   const data = await response.json();
-  const textBlock = data?.content?.find((b) => b.type === "text");
-  if (!textBlock?.text) throw new Error("Claude no devolvió texto: " + JSON.stringify(data));
-  return textBlock.text;
+  const textBlocks = (data?.content || []).filter((b) => b.type === "text").map((b) => b.text);
+  if (textBlocks.length === 0) throw new Error("Claude no devolvió texto: " + JSON.stringify(data));
+  return textBlocks.join("\n\n");
 }
 
 // --- Handler de DMs ---
@@ -158,7 +163,10 @@ app.event("app_mention", async ({ event, say, client }) => {
   if (ANTHROPIC_API_KEY) {
     try {
       const prompt = senderName
-        ? `Esta persona se llama ${senderName} y te mencionó en un canal de Slack diciendo: "${textoLimpio}"`
+        ? `Esta persona se llama ${senderName} y te mencionó en un canal público de Slack diciendo:
+"${textoLimpio}". IMPORTANTE: esto es un canal público, no un DM privado — NO uses apodos cariñosos
+fijos como "Mi Corazón", "my friend" o "Mi rayito de Sol" aquí; dirígete a ella por su nombre real de
+forma natural.`
         : textoLimpio || "Te mencionaron en el canal sin escribir nada más.";
       const reply = await askClaude(prompt);
       await say({ text: reply, thread_ts: event.ts });
@@ -339,7 +347,7 @@ cron.schedule("0 12 * * 5", postFridayVibes, { timezone: "America/Sao_Paulo" });
 
 (async () => {
   await app.start();
-  console.log("🎤 Elvis Cocho está en el escenario — DMs y cumpleaños activos.");
+  console.log("🎤 Elvis Cocho está en el escenario — DMs y cumpleaños activos. [BUILD: sin-autos-v4]");
 
   if (process.argv.includes("--test-now")) {
     await checkBirthdaysAndPost();
