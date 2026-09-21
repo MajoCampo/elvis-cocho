@@ -52,11 +52,13 @@ Tech Director). Sus reportes directos y los equipos de cada uno:
 - Jorge (Tech Lead Frontend) — con Ramón, Juan José, Efraín (Fullstack) y Daniel Eslava (AI & Automation)
 - Alejandro (Tech Lead Cloud & Infra) — con Danny Torres (DevOps)
 
-Al dirigirte a alguien, usa apodos cariñosos variados como "Mi Corazón", "my friend" o "Mi rayito de
-Sol" — NUNCA le digas "Compa" a nadie, bajo ninguna circunstancia. Cuando sepas el nombre real de quien
-te escribe, úsalo también junto con el apodo cariñoso (ej. "Laura, mi rayito de Sol"). Evita empezar
-tus mensajes con "Ay" o cualquier variante alargada de esa interjección (Ayy, AAAY, Ayyy, etc.) — de
-hecho, evita abrir con cualquier interjección de sorpresa como primera palabra. Entra directo con el
+Al dirigirte a alguien, usa apodos cariñosos variados como "Mi Corazón" o "my friend" — NUNCA le digas
+"Compa" ni "Mi rayito de Sol" a nadie, bajo ninguna circunstancia (Majo pidió explícitamente que se
+elimine ese apodo para siempre, para ella y para cualquier persona del equipo). Cuando sepas el nombre
+real de quien te escribe, úsalo también junto con el apodo cariñoso (ej. "Laura, mi Corazón"). Evita
+empezar tus mensajes con "Ay" o cualquier variante alargada de esa interjección (Ayy, AAAY, Ayyy,
+etc.) — de hecho, evita abrir con cualquier interjección de sorpresa como primera palabra. Entra
+directo con el
 saludo, el nombre de la persona, o el contenido; varía cómo abres cada respuesta.
 
 Cuando alguien de este equipo te escriba o sea mencionado, puedes referirte a su rol y su equipo con
@@ -93,7 +95,7 @@ function nextBirthdayReply() {
   return `🎉 El próximo cumpleaños es de <@${upcoming.slackId}> el ${upcoming.day}/${upcoming.month}. ¡Ya estoy calentando la voz! 🎤`;
 }
 
-async function askClaude(userText, maxTokens = 500) {
+async function askClaude(messages, maxTokens = 500) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -105,7 +107,7 @@ async function askClaude(userText, maxTokens = 500) {
       model: "claude-sonnet-5", // ajusta al modelo disponible en tu cuenta
       max_tokens: maxTokens,
       system: PERSONA,
-      messages: [{ role: "user", content: userText }],
+      messages,
       tools: [{ type: "web_search_20250305", name: "web_search" }],
     }),
   });
@@ -113,6 +115,33 @@ async function askClaude(userText, maxTokens = 500) {
   const textBlocks = (data?.content || []).filter((b) => b.type === "text").map((b) => b.text);
   if (textBlocks.length === 0) throw new Error("Claude no devolvió texto: " + JSON.stringify(data));
   return textBlocks.join("\n\n");
+}
+
+// Memoria de conversación en RAM, por persona (se pierde si el contenedor se reinicia).
+// Guarda los últimos intercambios de cada quien le escribe, para que Elvis Cocho tenga contexto.
+const conversationHistory = new Map();
+const MAX_HISTORY_MESSAGES = 20; // ~10 intercambios (usuario + Elvis) por persona
+
+function getHistory(key) {
+  return conversationHistory.get(key) || [];
+}
+
+function pushHistory(key, role, content) {
+  const history = getHistory(key);
+  history.push({ role, content });
+  if (history.length > MAX_HISTORY_MESSAGES) {
+    history.splice(0, history.length - MAX_HISTORY_MESSAGES);
+  }
+  conversationHistory.set(key, history);
+}
+
+async function askClaudeConversational(key, userText) {
+  const history = getHistory(key);
+  const messages = [...history, { role: "user", content: userText }];
+  const reply = await askClaude(messages);
+  pushHistory(key, "user", userText);
+  pushHistory(key, "assistant", reply);
+  return reply;
 }
 
 // --- Handler de DMs ---
@@ -137,10 +166,13 @@ app.message(async ({ message, say, client }) => {
 
   if (ANTHROPIC_API_KEY) {
     try {
-      const promptConNombre = senderName
-        ? `Esta persona se llama ${senderName} y te escribió: "${message.text}"`
-        : message.text;
-      const reply = await askClaude(promptConNombre);
+      const memoryKey = `dm:${message.user}`;
+      const isFirstMessage = getHistory(memoryKey).length === 0;
+      const promptConNombre =
+        isFirstMessage && senderName
+          ? `Esta persona se llama ${senderName} y te escribió: "${message.text}"`
+          : message.text;
+      const reply = await askClaudeConversational(memoryKey, promptConNombre);
       await say(reply);
       return;
     } catch (err) {
@@ -165,13 +197,15 @@ app.event("app_mention", async ({ event, say, client }) => {
 
   if (ANTHROPIC_API_KEY) {
     try {
-      const prompt = senderName
-        ? `Esta persona se llama ${senderName} y te mencionó en un canal público de Slack diciendo:
+      const memoryKey = `mention:${event.channel}:${event.user}`;
+      const isFirstMessage = getHistory(memoryKey).length === 0;
+      const prompt =
+        isFirstMessage && senderName
+          ? `Esta persona se llama ${senderName} y te mencionó en un canal público de Slack diciendo:
 "${textoLimpio}". IMPORTANTE: esto es un canal público, no un DM privado — NO uses apodos cariñosos
-fijos como "Mi Corazón", "my friend" o "Mi rayito de Sol" aquí; dirígete a ella por su nombre real de
-forma natural.`
-        : textoLimpio || "Te mencionaron en el canal sin escribir nada más.";
-      const reply = await askClaude(prompt);
+fijos como "Mi Corazón" ni "my friend" aquí; dirígete a ella por su nombre real de forma natural.`
+          : textoLimpio || "Te mencionaron en el canal sin escribir nada más.";
+      const reply = await askClaudeConversational(memoryKey, prompt);
       await say({ text: reply, thread_ts: event.ts });
       return;
     } catch (err) {
@@ -210,7 +244,7 @@ async function generateBirthdayMessage(name) {
 dirigido a la persona <@${name}>. Debe ser corto (2-4 líneas), exageradamente extrovertido y gracioso,
 con emojis, y usar la mención exacta <@${name}> dentro del texto (formato Slack). No agregues comillas
 alrededor de todo el mensaje, ni expliques lo que estás haciendo — responde ÚNICAMENTE con el mensaje final.`;
-    return await askClaude(prompt);
+    return await askClaude([{ role: "user", content: prompt }]);
   } catch (err) {
     console.error("Claude falló generando mensaje de cumpleaños, usando respaldo fijo:", err);
     return pickMessage(name);
@@ -288,7 +322,7 @@ producto/ingeniería/datos. Debe ser corto (2-4 líneas), casi ridículo de exag
 emojis, tono natural de "corporativo divertido" — SIN referencias al mundo automotriz, refacciones
 ni talleres. No repitas frases de días anteriores, sé creativo cada vez. Responde ÚNICAMENTE con el
 mensaje final, sin explicaciones.`;
-    return await askClaude(prompt);
+    return await askClaude([{ role: "user", content: prompt }]);
   } catch (err) {
     console.error("Claude falló generando la frase motivacional, usando respaldo fijo:", err);
     return motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
@@ -337,7 +371,7 @@ async function generateFridayMessage(cocktail) {
 #tech-product anunciando que hoy es día de relajarse, y que el cóctel "${cocktail}" queda oficialmente
 "liberado" (como broma, no en serio) para quien lo quiera disfrutar al terminar el día. Tono muy
 extrovertido, gracioso, con emojis. Responde ÚNICAMENTE con el mensaje final.`;
-    return await askClaude(prompt);
+    return await askClaude([{ role: "user", content: prompt }]);
   } catch (err) {
     console.error("Claude falló generando el mensaje del viernes, usando respaldo fijo:", err);
     return fallback;
