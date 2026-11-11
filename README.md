@@ -10,9 +10,23 @@
    BIRTHDAY_CHANNEL=#tech-product
    ANTHROPIC_API_KEY=sk-ant-...   # opcional, para respuestas con IA real
    GIPHY_API_KEY=tu-key-de-giphy  # opcional — sin esto usa una key pública de prueba con límite bajo
+   KUDOS_CHANNELS=#tech-product,#product-releases-and-updates  # opcional — canales que lee para los kudos
+   KUDOS_LOOKBACK_DAYS=3          # opcional — cuántos días hacia atrás revisa
    ```
 3. Edita `birthdays.json` con la lista real del equipo (nombre, `slackId` — el ID de usuario de Slack, no el @handle — mes y día).
 4. Corre `npm start` para dejarlo corriendo: escucha DMs en tiempo real (Socket Mode) y revisa cumpleaños todos los días a las 9am. Usa `node index.js --test-now` para forzar el chequeo de cumpleaños al iniciar, sin esperar al cron.
+
+## Kudos diarios por entregas
+
+De lunes a viernes a las 10am (hora São Paulo), Elvis lee los mensajes de los últimos `KUDOS_LOOKBACK_DAYS` días en los canales de `KUDOS_CHANNELS` (incluidos los mensajes de bots de deploy), le pide a Claude que identifique quién del equipo entregó algo concreto, elige al azar de 1 a 3 personas y las felicita en `BIRTHDAY_CHANNEL`. Evita repetir a quien felicitó en los últimos días y solo felicita a gente que está en `birthdays.json`.
+
+Para que funcione:
+- Necesita `ANTHROPIC_API_KEY`; sin ella se salta los kudos.
+- La app de Slack necesita los scopes `channels:history`, `groups:history`, `channels:read` y `groups:read` (reinstala la app después de agregarlos).
+- Elvis tiene que estar invitado a cada canal que lee (`/invite @Elvis Cocho`).
+- Si los deploys se anuncian en otro canal, agrégalo a `KUDOS_CHANNELS`.
+
+Prueba manual: `node index.js --test-kudos`.
 
 ## Sin `ANTHROPIC_API_KEY`
 
@@ -35,7 +49,7 @@ Este proceso necesita quedarse corriendo 24/7 (Socket Mode mantiene una conexió
    docker push <account-id>.dkr.ecr.<region>.amazonaws.com/elvis-cocho:latest
    ```
 3. Corre como servicio en ECS Fargate (1 task, sin load balancer ni puertos expuestos — solo hace conexiones salientes) o, si prefieren algo más simple, en la misma EC2 donde ya corre otro servicio interno, con `docker run -d --restart unless-stopped --env-file .env elvis-cocho`.
-4. Las variables de entorno (`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `BIRTHDAY_CHANNEL`, `ANTHROPIC_API_KEY`) van como secrets/env vars del task, nunca hardcodeadas en la imagen.
+4. Las variables de entorno (`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `BIRTHDAY_CHANNEL`, `ANTHROPIC_API_KEY`, `KUDOS_CHANNELS`) van como secrets/env vars del task, nunca hardcodeadas en la imagen.
 
 Quien tenga permisos de IAM/ECR para esto en tu org es, según lo que manejas, Alejandro Varela (Cloud & Infra).
 

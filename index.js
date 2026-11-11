@@ -1,6 +1,7 @@
 // Elvis Cocho — el agente más extrovertido de Pitz 🎉🕺
 // 1) Responde en DM con personalidad (usa Claude si hay API key, si no, respuestas armadas).
 // 2) Todos los días revisa cumpleaños y explota #tech-product con felicitaciones.
+// 3) De lunes a viernes lee los canales de los últimos días y felicita a 1-3 personas por lo que entregaron.
 
 require("dotenv").config();
 const { App } = require("@slack/bolt");
@@ -95,7 +96,7 @@ function nextBirthdayReply() {
   return `🎉 El próximo cumpleaños es de <@${upcoming.slackId}> el ${upcoming.day}/${upcoming.month}. ¡Ya estoy calentando la voz! 🎤`;
 }
 
-async function askClaude(messages, maxTokens = 500) {
+async function askClaude(messages, maxTokens = 500, { webSearch = true, system = PERSONA } = {}) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -106,9 +107,9 @@ async function askClaude(messages, maxTokens = 500) {
     body: JSON.stringify({
       model: "claude-sonnet-5", // ajusta al modelo disponible en tu cuenta
       max_tokens: maxTokens,
-      system: PERSONA,
+      system,
       messages,
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      ...(webSearch ? { tools: [{ type: "web_search_20250305", name: "web_search" }] } : {}),
     }),
   });
   const data = await response.json();
@@ -350,6 +351,178 @@ async function postDailyMotivation() {
 
 cron.schedule("0 11 * * 1-4", postDailyMotivation, { timezone: "America/Sao_Paulo" });
 
+// --- Kudos diarios: felicita a 1-3 personas por lo que entregaron en los últimos días ---
+// Lee los canales de KUDOS_CHANNELS (nombres o IDs separados por coma), le pide a Claude que
+// identifique entregas concretas de gente del equipo, elige al azar entre ellas y publica en CHANNEL.
+// Requiere ANTHROPIC_API_KEY (sin IA no hay forma de entender quién entregó qué) y que Elvis esté
+// invitado a cada canal, con los scopes channels:history, groups:history, channels:read, groups:read.
+const KUDOS_CHANNELS = (process.env.KUDOS_CHANNELS || "#tech-product,#product-releases-and-updates")
+  .split(",")
+  .map((c) => c.trim())
+  .filter(Boolean);
+const KUDOS_LOOKBACK_DAYS = Number(process.env.KUDOS_LOOKBACK_DAYS) || 3;
+const KUDOS_MAX_PEOPLE = 3;
+const KUDOS_MAX_MESSAGES_PER_CHANNEL = 300;
+const KUDOS_MAX_CHARS_PER_MESSAGE = 600;
+
+// Quiénes fueron felicitados recientemente, para no repetir a la misma persona días seguidos.
+// Vive en RAM: se reinicia si el contenedor se reinicia.
+let recentKudos = [];
+const RECENT_KUDOS_MEMORY = 6;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let channelIdCache = null;
+async function resolveChannelIds(names) {
+  const wanted = names.map((n) => n.replace(/^#/, ""));
+  const ids = [];
+  const byName = new Map();
+  if (wanted.some((n) => !/^[CG][A-Z0-9]+$/.test(n))) {
+    if (!channelIdCache) {
+      channelIdCache = new Map();
+      let cursor;
+      do {
+        const res = await app.client.conversations.list({
+          types: "public_channel,private_channel",
+          exclude_archived: true,
+          limit: 1000,
+          cursor,
+        });
+        for (const c of res.channels || []) channelIdCache.set(c.name, c.id);
+        cursor = res.response_metadata?.next_cursor;
+      } while (cursor);
+    }
+    for (const [k, v] of channelIdCache) byName.set(k, v);
+  }
+  for (const n of wanted) {
+    if (/^[CG][A-Z0-9]+$/.test(n)) ids.push({ id: n, name: n });
+    else if (byName.has(n)) ids.push({ id: byName.get(n), name: n });
+    else console.error(`Kudos: no encontré el canal #${n} (¿Elvis está invitado?)`);
+  }
+  return ids;
+}
+
+async function fetchRecentActivity(selfUserId) {
+  const oldest = String(Math.floor(Date.now() / 1000) - KUDOS_LOOKBACK_DAYS * 24 * 60 * 60);
+  const channels = await resolveChannelIds(KUDOS_CHANNELS);
+  const lines = [];
+
+  for (const { id, name } of channels) {
+    let cursor;
+    let count = 0;
+    try {
+      do {
+        const res = await app.client.conversations.history({ channel: id, oldest, limit: 200, cursor });
+        for (const m of res.messages || []) {
+          if (m.user === selfUserId) continue; // no leerse a sí mismo
+          if (m.subtype && !["bot_message", "thread_broadcast", "file_share"].includes(m.subtype)) continue;
+          const text = (m.text || "").replace(/\s+/g, " ").trim();
+          if (!text) continue;
+          const author = m.user ? `<@${m.user}>` : m.username || m.bot_profile?.name || "bot";
+          const date = new Date(Number(m.ts) * 1000).toISOString().slice(0, 10);
+          lines.push(`[#${name} ${date}] ${author}: ${text.slice(0, KUDOS_MAX_CHARS_PER_MESSAGE)}`);
+          count++;
+        }
+        cursor = res.response_metadata?.next_cursor;
+      } while (cursor && count < KUDOS_MAX_MESSAGES_PER_CHANNEL);
+    } catch (err) {
+      console.error(`Kudos: no pude leer #${name} (${err.data?.error || err.message})`);
+    }
+  }
+  return lines;
+}
+
+async function findDeliveries(activityLines) {
+  const roster = birthdays.map((b) => `- ${b.name}: <@${b.slackId}>`).join("\n");
+  const prompt = `Abajo tienes los mensajes de Slack de los últimos ${KUDOS_LOOKBACK_DAYS} días de varios
+canales del equipo de Tech & Product, y la lista del equipo con su ID de Slack.
+
+Identifica a las personas del equipo que ENTREGARON algo concreto en estos días: un deploy, un release,
+una feature, un fix, un análisis, un diseño, una prueba de QA, una integración, etc. Solo cuenta lo que
+el texto muestre claramente; no inventes nada ni felicites por simplemente participar en una conversación.
+Si un mensaje de un bot (por ejemplo, de deploys) nombra a una persona, mapéala a su ID con la lista.
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional, con este formato:
+{"entregas": [{"slackId": "U...", "logro": "descripción corta y concreta de lo que entregó"}]}
+Una entrada por persona (junta sus logros si tiene varios). Solo IDs de la lista. Si no hay nada, {"entregas": []}.
+
+EQUIPO:
+${roster}
+
+MENSAJES:
+${activityLines.join("\n")}`;
+
+  const raw = await askClaude([{ role: "user", content: prompt }], 1500, {
+    webSearch: false,
+    system: "Eres un analista preciso. Extraes hechos de mensajes de Slack y respondes solo con JSON.",
+  });
+  const json = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+  const validIds = new Set(birthdays.map((b) => b.slackId));
+  return (JSON.parse(json).entregas || []).filter((e) => validIds.has(e.slackId) && e.logro);
+}
+
+async function generateKudosMessage(elegidos) {
+  const detalle = elegidos.map((e) => `- <@${e.slackId}>: ${e.logro}`).join("\n");
+  const prompt = `Escribe UN mensaje para el canal público de Slack #tech-product felicitando a estas personas
+por lo que entregaron en los últimos días:
+${detalle}
+
+Reglas: usa la mención exacta de cada persona (formato <@ID>) y menciona su logro concreto, sin inventar
+nada que no esté arriba. Es un canal público: NO uses apodos cariñosos fijos como "Mi Corazón" ni
+"my friend". Corto (3-6 líneas), muy extrovertido, con emojis. Responde ÚNICAMENTE con el mensaje final.`;
+  return askClaude([{ role: "user", content: prompt }], 600, { webSearch: false });
+}
+
+async function postDailyKudos() {
+  if (!ANTHROPIC_API_KEY) {
+    console.log("Kudos: sin ANTHROPIC_API_KEY no puedo leer las entregas — me salto los kudos de hoy.");
+    return;
+  }
+  try {
+    const { user_id: selfUserId } = await app.client.auth.test();
+    const activity = await fetchRecentActivity(selfUserId);
+    if (activity.length === 0) {
+      console.log("Kudos: no hubo mensajes en los canales configurados — sin kudos hoy.");
+      return;
+    }
+
+    const entregas = await findDeliveries(activity);
+    if (entregas.length === 0) {
+      console.log("Kudos: no encontré entregas concretas — sin kudos hoy.");
+      return;
+    }
+
+    // Prioriza a quien no fue felicitado hace poco; si todos lo fueron, usa la lista completa.
+    const frescos = entregas.filter((e) => !recentKudos.includes(e.slackId));
+    const pool = shuffle(frescos.length > 0 ? frescos : entregas);
+    const cuantos = 1 + Math.floor(Math.random() * Math.min(KUDOS_MAX_PEOPLE, pool.length));
+    const elegidos = pool.slice(0, cuantos);
+
+    const [message, gifUrl] = await Promise.all([
+      generateKudosMessage(elegidos),
+      getRandomGif("applause"),
+    ]);
+    const blocks = [{ type: "section", text: { type: "mrkdwn", text: message } }];
+    if (gifUrl) blocks.push({ type: "image", image_url: gifUrl, alt_text: "gif de aplausos" });
+
+    await app.client.chat.postMessage({ channel: CHANNEL, text: message, blocks, unfurl_links: false });
+
+    recentKudos = [...recentKudos, ...elegidos.map((e) => e.slackId)].slice(-RECENT_KUDOS_MEMORY);
+    console.log(`👏 Kudos enviados a: ${elegidos.map((e) => e.slackId).join(", ")}`);
+  } catch (err) {
+    console.error("Kudos: falló la felicitación diaria:", err);
+  }
+}
+
+cron.schedule("0 10 * * 1-5", postDailyKudos, { timezone: "America/Sao_Paulo" });
+
 // --- Viernes: día de relajarse, cóctel random "liberado" ---
 const cocktails = [
   "Mojito", "Piña Colada", "Caipirinha", "Margarita", "Aperol Spritz",
@@ -393,7 +566,7 @@ cron.schedule("0 12 * * 5", postFridayVibes, { timezone: "America/Sao_Paulo" });
 
 (async () => {
   await app.start();
-  console.log("🎤 Elvis Cocho está en el escenario — DMs y cumpleaños activos. [BUILD: sin-autos-v4]");
+  console.log("🎤 Elvis Cocho está en el escenario — DMs, cumpleaños y kudos activos. [BUILD: sin-autos-v4]");
 
   if (process.argv.includes("--test-now")) {
     await checkBirthdaysAndPost();
@@ -405,5 +578,9 @@ cron.schedule("0 12 * * 5", postFridayVibes, { timezone: "America/Sao_Paulo" });
 
   if (process.argv.includes("--test-friday")) {
     await postFridayVibes();
+  }
+
+  if (process.argv.includes("--test-kudos")) {
+    await postDailyKudos();
   }
 })();
