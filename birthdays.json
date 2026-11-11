@@ -1,12 +1,16 @@
 [
   { "name": "Randy Bermudez", "slackId": "U0APE9D9PEC", "month": 1, "day": 10 },
+  { "name": "Juan Fernando Cely Ortega", "slackId": "U0CENR5LPGC", "month": 2, "day": 13 },
   { "name": "Carol Diniz", "slackId": "U0BRUB44AUD", "month": 2, "day": 16 },
   { "name": "Majo Campo", "slackId": "U09JYSJ8Z54", "month": 2, "day": 18 },
   { "name": "Ramon Perez", "slackId": "U0BRW8Z8UVC", "month": 2, "day": 24 },
+  { "name": "Juan David Uribe Agredo", "slackId": "U0C6AUR2CV8", "month": 4, "day": 8 },
   { "name": "Efrain Bentham", "slackId": "U0AHJTA1T3R", "month": 4, "day": 29 },
   { "name": "Daniel E. Herrera", "slackId": "U0BEX0Z92GK", "month": 5, "day": 8 },
+  { "name": "Victória Kiomy", "slackId": "U0C2UL72VNG", "month": 5, "day": 23 },
+  { "name": "Jeiser", "slackId": "U0C5ZVAS1DL", "month": 6, "day": 1 },
   { "name": "Alejandro Varela", "slackId": "U08T1RWD0GN", "month": 6, "day": 4 },
-  { "name": "Gilberto", "slackId": "U0BF38FPKFC", "month": 6, "day": 15 },
+  { "name": "David García", "slackId": "U0C8YL1E2L9", "month": 7, "day": 10 },
   { "name": "Brian Arenas", "slackId": "U08TCPU35GD", "month": 7, "day": 14 },
   { "name": "Gary", "slackId": "U08T1RVP92A", "month": 7, "day": 29 },
   { "name": "Daniela Suarez", "slackId": "U0AGG5ENU69", "month": 8, "day": 8 },
@@ -14,10 +18,14 @@
   { "name": "Jorge Camargo", "slackId": "U08T1RWMER4", "month": 8, "day": 18 },
   { "name": "Danita", "slackId": "U0A9NMCP7RQ", "month": 9, "day": 16 },
   { "name": "Julia Bento", "slackId": "U0A91GD7ZCG", "month": 10, "day": 4 },
+  { "name": "Amanda Marretto", "slackId": "U0C7YB9BWHZ", "month": 10, "day": 20 },
   { "name": "Gabi Cartoni", "slackId": "U0BQAF0HSVC", "month": 10, "day": 27 },
+  { "name": "julian.pitre", "slackId": "U0CDKG40Q5T", "month": 11, "day": 4 },
   { "name": "Joaquin Jailth Trejo Perez", "slackId": "U0C00BK6GQM", "month": 11, "day": 6 },
+  { "name": "Juan Jose Jaraba", "slackId": "U09A9JQ3JHZ", "month": 11, "day": 15 },
+  { "name": "Juan Jose Camargo", "slackId": "U0C65QD2EDT", "month": 11, "day": 16 },
   { "name": "Laura Marchi", "slackId": "U0BF184BLT0", "month": 11, "day": 17 },
   { "name": "JC", "slackId": "U0B9X32T4GY", "month": 11, "day": 21 },
   { "name": "Edwin", "slackId": "U0BNVTPQSTU", "month": 12, "day": 7 },
-  { "name": "Gabriela Goulart", "slackId": "U0B02C07QMT", "month": 12, "day": 13 }
+  { "name": "Mari Urenha", "slackId": "U0AQN5LKQQP", "month": 12, "day": 21 }
 ]
