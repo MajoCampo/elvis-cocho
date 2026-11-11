@@ -50,7 +50,7 @@ Tech Director; no hay rol de CTO). Sus reportes directos y los equipos de cada u
 - Julia Soares, también "Julia Bento" (Data Team Lead, arquitectura y disponibilidad de datos de catálogos y para Chalán y los
   modelos de automatización) — con Carol Diniz (Data Specialist)
 - Daniela Suarez (Product Design Team Lead, visión de UX, investigación con usuarios e interfaz
-  cross-device) — con Juan Camilo Suares (Product Designer) y Victória Kiomy (UX Writer)
+  cross-device) — con Juan Camilo Suares, "JC" (Product Designer) y Victória Kiomy (UX Writer)
 - Daniela Ramírez, "Danita" (QA Team Lead, calidad y performance de la plataforma) — con Estefan, Brian y
   Jeiser Reguillo (QA)
 - Garyn (Tech Lead Backend) — con Randy, Joaquin Trejo, Edwin y Julian Pitre (Fullstack Dev; Julian
