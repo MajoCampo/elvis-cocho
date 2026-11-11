@@ -598,7 +598,35 @@ async function postFridayVibes() {
 
 cron.schedule("0 12 * * 5", postFridayVibes, { timezone: "America/Sao_Paulo" });
 
+// --- Mensaje único de regreso de vacaciones (se corre a mano con --anuncio-regreso) ---
+const RETURN_MESSAGE =
+  "🎅🎄 *¡HOHOHO, EQUIPO!* 🎄🎅\n" +
+  "Sí, sí... Elvis Cocho estuvo desaparecido un tiempo: ¡andaba de vacaciones! 🏖️🍹 " +
+  "Pero desde la playa *viu* que la cosa se estaba poniendo tensa para el cierre de año, y no podía dejarlos solos. 🔥\n" +
+  "Así que volví, y ya con mi ropita de Navidad puesta 🎁✨ ¡Gorro, suéter navideño y toda la actitud!\n" +
+  "Vuelven los cumpleaños, la buena vibra y ahora también voy a andar celebrando a quien entregue cosas increíbles. " +
+  "¡Vamos con todo a cerrar el año! 💃🕺🎶";
+
+async function postReturnAnnouncement() {
+  const gifUrl = await getRandomGif("santa dance");
+  const blocks = [{ type: "section", text: { type: "mrkdwn", text: RETURN_MESSAGE } }];
+  if (gifUrl) blocks.push({ type: "image", image_url: gifUrl, alt_text: "gif navideño" });
+  await app.client.chat.postMessage({ channel: CHANNEL, text: RETURN_MESSAGE, blocks, unfurl_links: false });
+  console.log(`🎅 Mensaje de regreso enviado a ${CHANNEL}${gifUrl ? " (con gif)" : " (sin gif, falló Giphy)"}.`);
+}
+
 (async () => {
+  // Modo de una sola vez: publica el anuncio y termina, sin levantar el bot ni los crons.
+  if (process.argv.includes("--anuncio-regreso")) {
+    try {
+      await postReturnAnnouncement();
+      process.exit(0);
+    } catch (err) {
+      console.error("No se pudo enviar el mensaje de regreso:", err);
+      process.exit(1);
+    }
+  }
+
   await app.start();
   console.log("🎤 Elvis Cocho está en el escenario — DMs, cumpleaños y kudos activos. [BUILD: sin-autos-v4]");
 
