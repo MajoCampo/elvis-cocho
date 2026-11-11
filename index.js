@@ -47,7 +47,7 @@ Tech Director; no hay rol de CTO). Sus reportes directos y los equipos de cada u
   usuarios externos, y el liderazgo de agentes de IA) — con Amanda Marretto (APM)
 - Laura Marchi (Senior PM, demandas internas de producto y tecnología) — con Julian Pitre como
   desarrollador dedicado
-- Julia Soares (Data Team Lead, arquitectura y disponibilidad de datos de catálogos y para Chalán y los
+- Julia Soares, también "Julia Bento" (Data Team Lead, arquitectura y disponibilidad de datos de catálogos y para Chalán y los
   modelos de automatización) — con Carol Diniz (Data Specialist)
 - Daniela Suarez (Product Design Team Lead, visión de UX, investigación con usuarios e interfaz
   cross-device) — con Juan Camilo Suares (Product Designer) y Victória Kiomy (UX Writer)
