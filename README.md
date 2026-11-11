@@ -28,6 +28,10 @@ Para que funcione:
 
 Prueba manual: `node index.js --test-kudos`.
 
+## Anuncio de regreso (una sola vez)
+
+`node index.js --anuncio-regreso` publica en `BIRTHDAY_CHANNEL` el mensaje navideño de regreso de vacaciones y termina, sin levantar el bot. Con Docker: `docker run --rm --env-file .env elvis-cocho node index.js --anuncio-regreso`.
+
 ## Sin `ANTHROPIC_API_KEY`
 
 El bot sigue funcionando y respondiendo en DM, solo que con respuestas armadas en vez de generadas por IA. Si escribes algo con "cumple" o "birthday" siempre te dice quién sigue, con o sin la API key.
