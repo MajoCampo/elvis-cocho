@@ -35,8 +35,10 @@ fuego 🔥, brillo/estrellas ✨🌟, fiesta/confeti 🎉, música y baile 🎶�
 sobra para transmitir energía sin tocar el tema automotriz ni una sola vez.
 
 Eres Elvis Cocho, el agente de Slack más extrovertido, cálido y sociable de Pitz (una empresa B2B en
-Brasil y México). Hablas en español neutro, mezclando ocasionalmente palabras o frases en portugués —
-evita modismos marcados de un solo país (nada de "compa", "wey", ni jerga mexicana específica). Tu
+Brasil y México). Eres bilingüe: SIEMPRE respondes en el idioma en que te escriben. Si te escriben en
+portugués, respondes en portugués de Brasil, natural y cálido. Si te escriben en español, respondes en
+español neutro, mezclando ocasionalmente palabras o frases en portugués. En ambos idiomas evita modismos
+marcados de un solo país (nada de "compa", "wey", ni jerga mexicana específica). Tu
 personalidad es súper efusiva, cariñosa, con un toque flamboyant y dramático — usas muchos emojis y
 signos de exclamación, y AMAS elogiar a la gente sin freno: su trabajo, su energía, su estilo, lo que
 sea. Nunca eres cruel, nunca haces bromas pesadas — solo pura calidez y buena vibra.
@@ -244,22 +246,33 @@ const templates = [
     `De parte de Elvis Cocho: *"que este año venga cargado de bugs que se resuelven solos y de reuniones que terminan temprano"* 😂🎂`,
 ];
 
-function pickMessage(name) {
-  const fn = templates[Math.floor(Math.random() * templates.length)];
+const templatesPt = [
+  (name) =>
+    `:tada::guitar: ATENÇÃO, GENTE! Hoje é aniversário de <@${name}> e eu, Elvis Cocho, não vim sussurrar, vim GRITAR: ` +
+    `*"FELIZ ANIVERSÁRIO, LENDA"* 🎂🔥 Que venha o bolo, que toque a música e que ninguém trabalhe antes das 10! 💃🕺`,
+  (name) =>
+    `🚨 ALERTA DE FESTA 🚨 <@${name}> faz aniversário hoje e este canal está oficialmente declarado ZONA DE CELEBRAÇÃO. ` +
+    `Elvis Cocho no microfone 🎤: *"Mais um ano de puro talento, carisma e — sejamos sinceros — de paciência com todos nós!"* 🎉🎈`,
+];
+
+function pickMessage(name, lang = "es") {
+  const list = lang === "pt" ? templatesPt : templates;
+  const fn = list[Math.floor(Math.random() * list.length)];
   return fn(name);
 }
 
-async function generateBirthdayMessage(name) {
-  if (!ANTHROPIC_API_KEY) return pickMessage(name);
+async function generateBirthdayMessage(name, lang = "es") {
+  if (!ANTHROPIC_API_KEY) return pickMessage(name, lang);
   try {
     const prompt = `Escribe UN mensaje de cumpleaños para publicar en el canal de Slack #tech-product,
 dirigido a la persona <@${name}>. Debe ser corto (2-4 líneas), exageradamente extrovertido y gracioso,
 con emojis, y usar la mención exacta <@${name}> dentro del texto (formato Slack). No agregues comillas
-alrededor de todo el mensaje, ni expliques lo que estás haciendo — responde ÚNICAMENTE con el mensaje final.`;
+alrededor de todo el mensaje, ni expliques lo que estás haciendo — responde ÚNICAMENTE con el mensaje final.
+${lang === "pt" ? "Esta persona es del equipo de Brasil: escribe el mensaje completo en portugués de Brasil." : ""}`;
     return await askClaude([{ role: "user", content: prompt }]);
   } catch (err) {
     console.error("Claude falló generando mensaje de cumpleaños, usando respaldo fijo:", err);
-    return pickMessage(name);
+    return pickMessage(name, lang);
   }
 }
 
@@ -290,7 +303,7 @@ async function checkBirthdaysAndPost() {
   for (const persona of celebrantes) {
     const [gifUrl, messageText] = await Promise.all([
       getRandomGif("happy birthday"),
-      generateBirthdayMessage(persona.slackId),
+      generateBirthdayMessage(persona.slackId, persona.lang),
     ]);
     const blocks = [{ type: "section", text: { type: "mrkdwn", text: messageText } }];
     if (gifUrl) {
@@ -479,6 +492,15 @@ ${activityLines.join("\n")}`;
   return (JSON.parse(json).entregas || []).filter((e) => validIds.has(e.slackId) && e.logro);
 }
 
+const langById = new Map(birthdays.map((b) => [b.slackId, b.lang || "es"]));
+
+function kudosLanguageRule(elegidos) {
+  const pt = elegidos.filter((e) => langById.get(e.slackId) === "pt");
+  if (pt.length === 0) return "Escribe el mensaje en español.";
+  if (pt.length === elegidos.length) return "Todas estas personas son del equipo de Brasil: escribe el mensaje completo en portugués de Brasil.";
+  return `Escribe el mensaje en español, pero la parte dirigida a ${pt.map((e) => `<@${e.slackId}>`).join(", ")} (equipo de Brasil) va en portugués de Brasil.`;
+}
+
 async function generateKudosMessage(elegidos) {
   const detalle = elegidos.map((e) => `- <@${e.slackId}>: ${e.logro}`).join("\n");
   const prompt = `Escribe UN mensaje para el canal público de Slack #tech-product felicitando a estas personas
@@ -487,7 +509,8 @@ ${detalle}
 
 Reglas: usa la mención exacta de cada persona (formato <@ID>) y menciona su logro concreto, sin inventar
 nada que no esté arriba. Es un canal público: NO uses apodos cariñosos fijos como "Mi Corazón" ni
-"my friend". Corto (3-6 líneas), muy extrovertido, con emojis. Responde ÚNICAMENTE con el mensaje final.`;
+"my friend". Corto (3-6 líneas), muy extrovertido, con emojis. ${kudosLanguageRule(elegidos)}
+Responde ÚNICAMENTE con el mensaje final.`;
   return askClaude([{ role: "user", content: prompt }], 600, { webSearch: false });
 }
 
